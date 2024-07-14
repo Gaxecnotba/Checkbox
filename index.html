@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+
+    <body>
+        <h1>One Hundred Checkboxes</h1>
+        <div id="checkboxContainer"></div>
+        <script src="/socket.io/socket.io.js"></script>
+        <script src="index.js">
+
+            const socket = oi();
+            const div = document.getElementById('onehundredboxes');
+            const checkbox = document.getElementById('box');
+
+            socket.on('check box changed', (checkboxid, checked) => {
+                const checkbox = document.getElementById('box');
+                if (checkbox) {
+                    checkbox.checked = checked;
+                }
+            });
+        </script>
+    </body>
+
+</html>
