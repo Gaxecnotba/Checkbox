@@ -9,13 +9,37 @@
 
     <body>
         <h1>One Hundred Checkboxes</h1>
-        <div id="checkboxContainer"></div>
+        <div id="checkbox-container">
+            <input id="box" type="checkbox"> </input>
+        </div>
         <script src="/socket.io/socket.io.js"></script>
-        <script src="index.js">
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const container = document.getElementById('checkbox-container');
 
-            const socket = oi();
+                for (let i = 1; i <= 100; i++) {
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `checkbox-${i}`;
+
+                    const label = document.createElement('label');
+                    label.htmlFor = `checkbox-${i}`;
+
+                    // const lineBreak = document.createElement('br');
+
+                    container.appendChild(checkbox);
+                    container.appendChild(label);
+                }
+            });
+
+
+            const socket = io();
             const div = document.getElementById('onehundredboxes');
             const checkbox = document.getElementById('box');
+
+            socket.on('connect', function () {
+                console.log('connected to the server');
+            });
 
             socket.on('check box changed', (checkboxid, checked) => {
                 const checkbox = document.getElementById('box');

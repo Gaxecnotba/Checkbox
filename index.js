@@ -6,7 +6,7 @@ import { Server } from "socket.io";
 
 const app = express();
 const server = createServer(app);
-const oi = new Server(server, {
+const io = new Server(server, {
   connectionStateRecovery: {},
 });
 
@@ -16,9 +16,9 @@ app.get("/", (req, res) => {
   res.sendFile(join(__dirname, "index.html"));
 });
 
-oi.on("connection", (socket) => {
+io.on("connection", (socket) => {
   socket.on("check box changed", (checkboxid, checked) => {
-    oi.emit("check box changed", checkboxid, checked);
+    io.emit("check box changed", checkboxid, checked);
     console.log("connected");
   });
 });
