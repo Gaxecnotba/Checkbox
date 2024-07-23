@@ -6,7 +6,6 @@ import { Server } from "socket.io";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 
-// open the database file
 async function setupDB() {
   const db = await open({
     filename: "checkbox.db",
