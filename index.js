@@ -5,6 +5,9 @@ import { dirname, join } from "node:path";
 import { Server } from "socket.io";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
+import session from "express-session";
+import passport from "passport";
+import SQLiteStore from "connect-sqlite3";
 
 async function setupDB() {
   const db = await open({
@@ -17,8 +20,9 @@ async function setupDB() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         checkboxename TEXT UNIQUE,
         checked BOOLEAN
-    );  
+    );
   `);
+
   for (let i = 1; i <= 100; i++) {
     try {
       await db.run(
@@ -27,31 +31,40 @@ async function setupDB() {
         false
       );
     } catch (err) {
-      // Ignore duplicate entry errors
       if (err.code !== "SQLITE_CONSTRAINT") {
         console.error("Something went wrong inserting checkboxes", err);
       }
     }
   }
+
   return db;
 }
+
 const app = express();
 const server = createServer(app);
 const io = new Server(server);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+app.use(express.static(join(__dirname, "client")));
 
-app.use(express.static(__dirname));
+app.use(
+  session({
+    secret: "secret",
+    resave: false,
+    saveUninitialized: false,
+    store: new SQLiteStore({ db: "users.db", dir: "./server/db/users.db" }),
+  })
+);
 
-app.get("/", (req, res) => {
-  res.sendFile(join(__dirname, "index.html"));
-});
+app.use(passport.authenticate("session"));
+app.use(passport.initialize());
+app.use(passport.session());
+import router from "./routes/auth.js";
+app.use("/", router);
 
 setupDB().then((db) => {
   io.on("connection", (socket) => {
     console.log("A user connected");
-
-    // Send the initial state of checkboxes to the client
     db.all("SELECT checkboxename, checked FROM checkbox").then((rows) => {
       rows.forEach((row) => {
         socket.emit("checkbox changed", {
@@ -81,7 +94,6 @@ setupDB().then((db) => {
           data.id
         );
 
-        // Broadcast the checkbox state to all connected clients
         console.log(
           `Received "checkbox changed" event: ${data.id} is now ${data.checked}`
         );
@@ -95,8 +107,8 @@ setupDB().then((db) => {
       console.log("A user disconnected");
     });
   });
+});
 
-  server.listen(3000, () => {
-    console.log("Server running at http://localhost:3000");
-  });
+server.listen(3000, () => {
+  console.log("Server running at http://localhost:3000");
 });
