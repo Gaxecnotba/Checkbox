@@ -109,4 +109,4 @@ router.post("/logout", function (req, res) {
   });
 });
 
-export { router as authRouter };
+export default router;

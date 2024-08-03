@@ -6,22 +6,25 @@ import { Server } from "socket.io";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import session from "express-session";
+import connectSqlite3 from "connect-sqlite3";
+import login from "./routes/auth.js";
 import passport from "passport";
-import SQLiteStore from "connect-sqlite3";
 
-async function setupDB() {
+async function main() {
+  const SQLiteStore = connectSqlite3(session);
   const db = await open({
     filename: "checkbox.db",
     driver: sqlite3.Database,
   });
 
   await db.exec(`
-    CREATE TABLE IF NOT EXISTS checkbox (
+      CREATE TABLE IF NOT EXISTS checkbox (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        checkboxename TEXT UNIQUE,
-        checked BOOLEAN
-    );
-  `);
+        checkboxename TEXT UNIQUE ,
+        checked BOOLEAN,
+        user TEXT
+      );
+    `);
 
   for (let i = 1; i <= 100; i++) {
     try {
@@ -36,79 +39,98 @@ async function setupDB() {
       }
     }
   }
+  const app = express();
+  const server = createServer(app);
+  const io = new Server(server);
 
-  return db;
-}
+  const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const app = express();
-const server = createServer(app);
-const io = new Server(server);
+  app.use(express.static(join(__dirname, "client")));
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-app.use(express.static(join(__dirname, "client")));
-
-app.use(
-  session({
+  const sessionM = session({
     secret: "secret",
-    resave: false,
+    resave: true,
     saveUninitialized: false,
-    store: new SQLiteStore({ db: "users.db", dir: "./server/db/users.db" }),
-  })
-);
+    store: new SQLiteStore({ db: "users.db", dir: "server/db" }),
+  });
 
-app.use(passport.authenticate("session"));
-app.use(passport.initialize());
-app.use(passport.session());
-import router from "./routes/auth.js";
-app.use("/", router);
+  app.use(sessionM);
 
-setupDB().then((db) => {
+  app.use(passport.authenticate("session"));
+  // app.use(passport.session());
+  app.use("/", login);
+
+  app.get("/", (req, res) => {
+    const session = req.user;
+    if (!session) {
+      return res.redirect("/client/login.html");
+    }
+    res.sendFile(join(__dirname, "index.html"));
+  });
+
+  function handshake(session) {
+    return (req, res, next) => {
+      const is_handshake = req._query.sid === undefined;
+      if (is_handshake) {
+        session(req, res, next);
+      } else {
+        next();
+      }
+    };
+  }
+
+  io.engine.use(handshake(sessionM));
+  io.engine.use(handshake(passport.session()));
+  io.engine.use(
+    handshake((req, res, next) => {
+      if (req.user) {
+        next();
+      } else {
+        res.writeHead(401);
+        res.end();
+      }
+    })
+  );
+
   io.on("connection", (socket) => {
-    console.log("A user connected");
-    db.all("SELECT checkboxename, checked FROM checkbox").then((rows) => {
+    const userId = socket.request.user.id;
+    socket.join(`user:${userId}`);
+
+    // Emit the current state of the checkboxes when a user connects
+    db.all("SELECT checkboxename, checked FROM checkbox WHERE user = ?", [
+      userId,
+    ]).then((rows) => {
       rows.forEach((row) => {
         socket.emit("checkbox changed", {
           id: row.checkboxename,
           checked: row.checked,
+          user: userId,
         });
       });
-    });
-
-    socket.on("checkboxes-names", async (data) => {
-      try {
-        await db.run(
-          "INSERT INTO checkbox (checkboxename, checked) VALUES (?, ?)",
-          data.name,
-          data.checked
-        );
-      } catch (err) {
-        console.error("Something went wrong", err);
-      }
     });
 
     socket.on("checkbox changed", async (data) => {
       try {
         await db.run(
-          "UPDATE checkbox SET checked = ? WHERE checkboxename = ?",
+          `INSERT INTO checkbox (checkboxename, checked, user) VALUES (?, ?, ?)
+           ON CONFLICT(checkboxename) DO UPDATE SET checked = excluded.checked, user = excluded.user`,
+          data.id,
           data.checked,
-          data.id
+          userId
         );
-
-        console.log(
-          `Received "checkbox changed" event: ${data.id} is now ${data.checked}`
-        );
-        socket.broadcast.emit("checkbox changed", data);
+        io.to(`user:${userId}`).emit("checkbox changed", {
+          id: data.id,
+          checked: data.checked,
+          user: userId,
+        });
       } catch (err) {
-        console.error("Something went wrong updating the checkbox", err);
+        console.error("Something went wrong", err);
       }
     });
-
-    socket.on("disconnect", () => {
-      console.log("A user disconnected");
-    });
   });
-});
 
-server.listen(3000, () => {
-  console.log("Server running at http://localhost:3000");
-});
+  server.listen(3000, () => {
+    console.log("Server running at http://localhost:3000");
+  });
+}
+main();

@@ -1,5 +1,4 @@
 import sqlite3 from "sqlite3";
-import crypto from "crypto";
 import { mkdirSync } from "fs";
 
 mkdirSync("server/db", { recursive: true });
@@ -24,15 +23,6 @@ db.serialize(function () {
       provider TEXT NOT NULL, \
       subject TEXT NOT NULL, \
       UNIQUE (provider, subject) \
-    )"
-  );
-
-  db.run(
-    "CREATE TABLE IF NOT EXISTS todos ( \
-      id INTEGER PRIMARY KEY, \
-      owner_id INTEGER NOT NULL, \
-      title TEXT NOT NULL, \
-      completed INTEGER \
     )"
   );
 });
